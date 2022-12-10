@@ -3,7 +3,7 @@
 import rospy
 from dataclasses import dataclass
 from rio_control_node.msg import Joystick_Status, Robot_Status
-from hmi_agent_node.msg import HMI_Signals
+from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 
 @dataclass
