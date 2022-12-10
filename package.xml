@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>hmi_agent_node</name>
+  <version>0.0.1</version>
+  <description>
+    hmi_agent_node
+  </description>
+  <author>Team 195</author>
+  <maintainer email="info@team195.com">Team 195</maintainer>
+  <license>BSD</license>
+  <url>https://github.com/frcteam195/hmi_agent_simulation_robot_py_node</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>ck_utilities_py_node</depend>
+
+  <test_depend>rostest</test_depend>
+</package>
