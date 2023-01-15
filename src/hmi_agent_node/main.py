@@ -8,19 +8,24 @@ from ck_utilities_py_node.joystick import Joystick
 from ck_utilities_py_node.ckmath import *
 import numpy as np
 
+
 @dataclass
 class DriveParams:
     drive_fwd_back_axis_id: int = -1
     drive_fwd_back_axis_inverted: bool = False
+
     drive_left_right_axis_id: int = -1
     drive_left_right_axis_inverted: bool = False
+
     drive_z_axis_id: int = -1
     drive_z_axis_inverted: bool = False
+
     drive_axis_deadband: float = 0.05
     drive_z_axis_deadband: float = 0.05
 
+    robot_orient_button_id: int = -1
+    field_orient_button_id: int = -1
     drive_brake_button_id: int = -1
-    drive_quickturn_button_id: int = -1
 
 
 drive_params = DriveParams()
@@ -35,6 +40,8 @@ bb2_joystick = Joystick(3)
 
 is_auto = False
 
+drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+
 
 def robot_status_callback(msg: Robot_Status):
     global is_auto
@@ -42,13 +49,14 @@ def robot_status_callback(msg: Robot_Status):
 
 
 def joystick_callback(msg: Joystick_Status):
+    global drivetrain_orientation
     global is_auto
     global hmi_pub
     global drive_joystick
     global arm_joystick
     global bb1_joystick
     global bb2_joystick
-    global params
+    global drive_params
     Joystick.update(msg)
 
     hmi_update_msg = HMI_Signals()
@@ -85,6 +93,13 @@ def joystick_callback(msg: Joystick_Status):
     hmi_update_msg.drivetrain_swerve_percent_fwd_vel = limit(r, 0.0, 1.0)
     hmi_update_msg.drivetrain_swerve_percent_angular_rot = z
 
+    if drive_joystick.getButton(drive_params.robot_orient_button_id):
+        drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+    elif drive_joystick.getButton(drive_params.field_orient_button_id):
+        drivetrain_orientation = HMI_Signals.FIELD_ORIENTED
+
+    hmi_update_msg.drivetrain_orientation = drivetrain_orientation
+
     hmi_pub.publish(hmi_update_msg)
 
 
@@ -92,13 +107,29 @@ def init_params():
     global drive_params
 
     drive_params.drive_fwd_back_axis_id = rospy.get_param(
-        "drive_fwd_back_axis_id", -1)
+        "/hmi_agent_node/drive_fwd_back_axis_id", -1)
     drive_params.drive_fwd_back_axis_inverted = rospy.get_param(
-        "drive_fwd_back_axis_inverted", -1)
+        "/hmi_agent_node/drive_fwd_back_axis_inverted", False)
 
-    drive_params.drive_turn_axis_id = rospy.get_param("drive_turn_axis_id", -1)
-    drive_params.drive_turn_axis_inverted = rospy.get_param(
-        "drive_turn_axis_inverted", -1)
+    drive_params.drive_left_right_axis_id = rospy.get_param(
+        "/hmi_agent_node/drive_left_right_axis_id", -1)
+    drive_params.drive_left_right_axis_inverted = rospy.get_param(
+        "/hmi_agent_node/drive_left_right_axis_inverted", False)
+
+    drive_params.drive_z_axis_id = rospy.get_param("/hmi_agent_node/drive_z_axis_id", -1)
+    drive_params.drive_z_axis_inverted = rospy.get_param(
+        "/hmi_agent_node/drive_z_axis_inverted", False)
+
+    drive_params.drive_z_axis_deadband = rospy.get_param(
+        "/hmi_agent_node/drive_z_axis_deadband", 0.05)
+    drive_params.drive_axis_deadband = rospy.get_param(
+        "/hmi_agent_node/drive_axis_deadband", 0.05)
+
+    drive_params.robot_orient_button_id = rospy.get_param(
+        "/hmi_agent_node/robot_orient_button_id", -1)
+    drive_params.field_orient_button_id = rospy.get_param(
+        "/hmi_agent_node/field_orient_button_id", -1)
+    drive_params.drive_brake_button_id = rospy.get_param("/hmi_agent_node/brake_button_id", -1)
 
 
 def ros_main(node_name):
