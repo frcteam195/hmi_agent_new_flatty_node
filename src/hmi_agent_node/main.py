@@ -7,19 +7,20 @@ from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 
 @dataclass
-class Params:
-    drivetrain_fwd_back : float = 0
-    drivetrain_left_right : float = 0
-    drivetrain_swerve_percent_fwd_vel : float = 0
-    drivetrain_swerve_direction : float = 0
-    drivetrain_swerve_percent_angular_rot : float = 0
-    drivetrain_quickturn : bool = False
-    drivetrain_brake : bool = False
-    gauge_axis_id: int = -1
-    elevator_vertical_axis_id: int = -1
-    claw_open_button_id: int = -1
+class DriveParams:
+    drive_fwd_back_axis_id: int = -1
+    drive_fwd_back_axis_inverted: bool = False
+    drive_turn_axis_id: int = -1
+    drive_turn_axis_inverted: bool = False
+    drive_z_axis_id: int = -1
+    drive_z_axis_inverted: bool = False
+    drive_axis_deadband: float = 0.05
+    drive_z_axis_deadband: float = 0.05
 
-params = Params()
+    drive_brake_button_id: int = -1
+    drive_quickturn_button_id: int = -1
+
+drive_params = DriveParams()
 
 hmi_pub = rospy.Publisher(name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
 
@@ -46,19 +47,26 @@ def joystick_callback(msg : Joystick_Status):
 
     hmi_update_msg = HMI_Signals()
 
-    hmi_update_msg.gauge_value = int(1500 + (1500 * drive_joystick.getRawAxis(params.gauge_axis_id)))
-    hmi_update_msg.elevator_vertical = float(drive_joystick.getRawAxis(params.elevator_vertical_axis_id))
-    hmi_update_msg.claw_open = bool(drive_joystick.getButton(params.claw_open_button_id))
+    if drive_params.drive_fwd_back_axis_inverted:
+        hmi_update_msg.drivetrain_fwd_back = -drive_joystick.getRawAxis(drive_params.drive_fwd_back_axis_id)
+    else:
+        hmi_update_msg.drivetrain_fwd_back = drive_joystick.getRawAxis(drive_params.drive_fwd_back_axis_id)
+
+    if drive_params.drive_turn_axis_inverted:
+        hmi_update_msg.drivetrain_left_right = -drive_joystick.getRawAxis(drive_params.drive_turn_axis_id)
+    else:
+        hmi_update_msg.drivetrain_left_right = drive_joystick.getRawAxis(drive_params.drive_turn_axis_id)
 
     hmi_pub.publish(hmi_update_msg)
 
 
 def init_params():
-    global params
-    params.gauge_axis_id = rospy.get_param("gauge_axis_id", -1)
-    params.elevator_vertical_axis_id = rospy.get_param("elevator_vertical_axis_id", -1)
-    params.claw_open_button_id = rospy.get_param("claw_open_button_id", -1)
+    global drive_params
+    drive_params.drive_fwd_back_axis_id = rospy.get_param("drive_fwd_back_axis_id", -1)
+    drive_params.drive_fwd_back_axis_inverted = rospy.get_param("drive_fwd_back_axis_inverted", -1)
 
+    drive_params.drive_turn_axis_id = rospy.get_param("drive_turn_axis_id", -1)
+    drive_params.drive_turn_axis_inverted = rospy.get_param("drive_turn_axis_inverted", -1)
 
 def ros_main(node_name):
     rospy.init_node(node_name)
