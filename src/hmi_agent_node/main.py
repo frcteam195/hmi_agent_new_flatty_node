@@ -25,7 +25,7 @@ class DriveParams:
 
     robot_orient_button_id: int = -1
     field_orient_button_id: int = -1
-    drive_brake_button_id: int = -1
+    brake_button_id: int = -1
 
 
 drive_params = DriveParams()
@@ -62,7 +62,7 @@ def joystick_callback(msg: Joystick_Status):
     hmi_update_msg = HMI_Signals()
 
     hmi_update_msg.drivetrain_brake = drive_joystick.getButton(
-        drive_params.drive_brake_button_id)
+        drive_params.brake_button_id)
 
     invert_axis_fwd_back = -1 if drive_params.drive_fwd_back_axis_inverted else 1
     invert_axis_left_right = -1 if drive_params.drive_left_right_axis_inverted else 1
@@ -129,7 +129,7 @@ def init_params():
         "/hmi_agent_node/robot_orient_button_id", -1)
     drive_params.field_orient_button_id = rospy.get_param(
         "/hmi_agent_node/field_orient_button_id", -1)
-    drive_params.drive_brake_button_id = rospy.get_param("/hmi_agent_node/brake_button_id", -1)
+    drive_params.brake_button_id = rospy.get_param("/hmi_agent_node/brake_button_id", -1)
 
 
 def ros_main(node_name):
