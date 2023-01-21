@@ -6,6 +6,7 @@ from rio_control_node.msg import Joystick_Status, Robot_Status
 from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 from ck_utilities_py_node.ckmath import *
+from nav_msgs.msg._Odometry import Odometry
 import numpy as np
 
 
@@ -26,12 +27,16 @@ class DriveParams:
     robot_orient_button_id: int = -1
     field_orient_button_id: int = -1
     brake_button_id: int = -1
+    reset_odometry_button_id: int = -1
 
 
 drive_params = DriveParams()
 
 hmi_pub = rospy.Publisher(
     name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
+
+odom_pub = rospy.Publisher(
+    name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
 
 drive_joystick = Joystick(0)
 arm_joystick = Joystick(1)
@@ -100,6 +105,109 @@ def joystick_callback(msg: Joystick_Status):
 
     hmi_update_msg.drivetrain_orientation = drivetrain_orientation
 
+    if drive_joystick.getButton(drive_params.reset_odometry_button_id):
+        odom = Odometry()
+        
+        odom.header.stamp = rospy.Time.now()
+        odom.header.frame_id = 'odom'
+        odom.child_frame_id = 'base_link'
+
+        odom.pose.pose.orientation.w = 1
+        odom.pose.pose.orientation.x = 0
+        odom.pose.pose.orientation.y = 0
+        odom.pose.pose.orientation.z = 0
+        odom.pose.pose.position.x = 0
+        odom.pose.pose.position.y = 0
+        odom.pose.pose.position.z = 0
+
+        odom.twist.twist.linear.x = 0
+        odom.twist.twist.linear.y = 0
+        odom.twist.twist.linear.z = 0
+
+        odom.twist.twist.angular.x = 0
+        odom.twist.twist.angular.y = 0
+        odom.twist.twist.angular.z = 0
+
+        odom.pose.covariance = [
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.00001,
+        ]
+
+        odom.twist.covariance =[
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.001,
+        ]
+
+        odom_pub.publish(odom)
+
     hmi_pub.publish(hmi_update_msg)
 
 
@@ -130,6 +238,8 @@ def init_params():
     drive_params.field_orient_button_id = rospy.get_param(
         "/hmi_agent_node/field_orient_button_id", -1)
     drive_params.brake_button_id = rospy.get_param("/hmi_agent_node/brake_button_id", -1)
+    drive_params.reset_odometry_button_id = rospy.get_param(
+        "hmi_agent_node/reset_odometry_button_id", -1)
 
 
 def ros_main(node_name):
