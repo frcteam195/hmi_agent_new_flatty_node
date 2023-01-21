@@ -2,7 +2,7 @@
 
 import rospy
 from dataclasses import dataclass
-from rio_control_node.msg import Joystick_Status, Robot_Status
+from ck_ros_base_msgs_node.msg import Joystick_Status, Robot_Status
 from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 from ck_utilities_py_node.ckmath import *
@@ -107,7 +107,7 @@ def joystick_callback(msg: Joystick_Status):
 
     if drive_joystick.getButton(drive_params.reset_odometry_button_id):
         odom = Odometry()
-        
+
         odom.header.stamp = rospy.Time.now()
         odom.header.frame_id = 'odom'
         odom.child_frame_id = 'base_link'
