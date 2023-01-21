@@ -32,11 +32,8 @@ class DriveParams:
 
 drive_params = DriveParams()
 
-hmi_pub = rospy.Publisher(
-    name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
-
-odom_pub = rospy.Publisher(
-    name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
+hmi_pub = None
+odom_pub = None
 
 drive_joystick = Joystick(0)
 arm_joystick = Joystick(1)
@@ -243,8 +240,14 @@ def init_params():
 
 
 def ros_main(node_name):
+    global hmi_pub
+    global odom_pub
     rospy.init_node(node_name)
     init_params()
+    hmi_pub = rospy.Publisher(
+        name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
+    odom_pub = rospy.Publisher(
+        name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
     rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status,
                      callback=joystick_callback, queue_size=1, tcp_nodelay=True)
     rospy.Subscriber(name="/RobotStatus", data_class=Robot_Status,
