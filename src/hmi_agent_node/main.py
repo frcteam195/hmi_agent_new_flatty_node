@@ -30,17 +30,22 @@ class DriveParams:
     brake_button_id: int = -1
     reset_odometry_button_id: int = -1
 
+@dataclass
+class OperatorParams:
+    cube_request_button_id: int = -1
+    cone_request_button_id: int = -1
+    party_mode_button_id: int = -1
+
 
 drive_params = DriveParams()
+operator_params = OperatorParams()
 
 hmi_pub = None
 odom_pub = None
 intake_pub = None
 
 drive_joystick = Joystick(0)
-arm_joystick = Joystick(1)
-bb1_joystick = Joystick(2)
-bb2_joystick = Joystick(3)
+operator_controller = Joystick(1)
 
 is_auto = False
 
@@ -57,10 +62,10 @@ def joystick_callback(msg: Joystick_Status):
     global is_auto
     global hmi_pub
     global drive_joystick
-    global arm_joystick
-    global bb1_joystick
-    global bb2_joystick
+    global 
+
     global drive_params
+    global operator_params
     Joystick.update(msg)
 
     hmi_update_msg = HMI_Signals()
@@ -221,33 +226,28 @@ def joystick_callback(msg: Joystick_Status):
 
 def init_params():
     global drive_params
+    global operator_params
 
-    drive_params.drive_fwd_back_axis_id = rospy.get_param(
-        "/hmi_agent_node/drive_fwd_back_axis_id", -1)
-    drive_params.drive_fwd_back_axis_inverted = rospy.get_param(
-        "/hmi_agent_node/drive_fwd_back_axis_inverted", False)
+    drive_params.drive_fwd_back_axis_id = rospy.get_param("/hmi_agent_node/drive_fwd_back_axis_id", -1)
+    drive_params.drive_fwd_back_axis_inverted = rospy.get_param("/hmi_agent_node/drive_fwd_back_axis_inverted", False)
 
-    drive_params.drive_left_right_axis_id = rospy.get_param(
-        "/hmi_agent_node/drive_left_right_axis_id", -1)
-    drive_params.drive_left_right_axis_inverted = rospy.get_param(
-        "/hmi_agent_node/drive_left_right_axis_inverted", False)
+    drive_params.drive_left_right_axis_id = rospy.get_param("/hmi_agent_node/drive_left_right_axis_id", -1)
+    drive_params.drive_left_right_axis_inverted = rospy.get_param("/hmi_agent_node/drive_left_right_axis_inverted", False)
 
     drive_params.drive_z_axis_id = rospy.get_param("/hmi_agent_node/drive_z_axis_id", -1)
-    drive_params.drive_z_axis_inverted = rospy.get_param(
-        "/hmi_agent_node/drive_z_axis_inverted", False)
+    drive_params.drive_z_axis_inverted = rospy.get_param("/hmi_agent_node/drive_z_axis_inverted", False)
 
-    drive_params.drive_z_axis_deadband = rospy.get_param(
-        "/hmi_agent_node/drive_z_axis_deadband", 0.05)
-    drive_params.drive_axis_deadband = rospy.get_param(
-        "/hmi_agent_node/drive_axis_deadband", 0.05)
+    drive_params.drive_z_axis_deadband = rospy.get_param("/hmi_agent_node/drive_z_axis_deadband", 0.05)
+    drive_params.drive_axis_deadband = rospy.get_param("/hmi_agent_node/drive_axis_deadband", 0.05)
 
-    drive_params.robot_orient_button_id = rospy.get_param(
-        "/hmi_agent_node/robot_orient_button_id", -1)
-    drive_params.field_orient_button_id = rospy.get_param(
-        "/hmi_agent_node/field_orient_button_id", -1)
+    drive_params.robot_orient_button_id = rospy.get_param("/hmi_agent_node/robot_orient_button_id", -1)
+    drive_params.field_orient_button_id = rospy.get_param("/hmi_agent_node/field_orient_button_id", -1)
     drive_params.brake_button_id = rospy.get_param("/hmi_agent_node/brake_button_id", -1)
-    drive_params.reset_odometry_button_id = rospy.get_param(
-        "hmi_agent_node/reset_odometry_button_id", -1)
+    drive_params.reset_odometry_button_id = rospy.get_param("hmi_agent_node/reset_odometry_button_id", -1)
+
+    operator_params.cube_request_button_id = rospy.get_param("/hmi_agent_node/cube_request_button_id", -1)
+    operator_params.cone_request_button_id = rospy.get_param("/hmi_agent_node/cone_request_button_id", -1)
+    operator_params.party_mode_button_id = rospy.get_param("/hmi_agent_node/party_mode_button_id", -1)
 
 
 def ros_main(node_name):
@@ -256,15 +256,11 @@ def ros_main(node_name):
     global intake_pub
     rospy.init_node(node_name)
     init_params()
-    hmi_pub = rospy.Publisher(
-        name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
-    odom_pub = rospy.Publisher(
-        name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
-    intake_pub = rospy.Publisher(
-        name="/IntakeControl", data_class=Intake_Control, queue_size=10, tcp_nodelay=True
-    )
-    rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status,
-                     callback=joystick_callback, queue_size=1, tcp_nodelay=True)
-    rospy.Subscriber(name="/RobotStatus", data_class=Robot_Status,
-                     callback=robot_status_callback, queue_size=1, tcp_nodelay=True)
+
+    hmi_pub = rospy.Publisher(name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
+    odom_pub = rospy.Publisher(name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
+    intake_pub = rospy.Publisher(name="/IntakeControl", data_class=Intake_Control, queue_size=10, tcp_nodelay=True)
+
+    rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status, callback=joystick_callback, queue_size=1, tcp_nodelay=True)
+    rospy.Subscriber(name="/RobotStatus", data_class=Robot_Status, callback=robot_status_callback, queue_size=1, tcp_nodelay=True)
     rospy.spin()
