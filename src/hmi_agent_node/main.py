@@ -61,8 +61,9 @@ def joystick_callback(msg: Joystick_Status):
     global drivetrain_orientation
     global is_auto
     global hmi_pub
+
     global drive_joystick
-    global 
+    global operator_params
 
     global drive_params
     global operator_params
@@ -70,25 +71,20 @@ def joystick_callback(msg: Joystick_Status):
 
     hmi_update_msg = HMI_Signals()
 
-    hmi_update_msg.drivetrain_brake = drive_joystick.getButton(
-        drive_params.brake_button_id)
+    hmi_update_msg.drivetrain_brake = drive_joystick.getButton(drive_params.brake_button_id)
 
     invert_axis_fwd_back = -1 if drive_params.drive_fwd_back_axis_inverted else 1
     invert_axis_left_right = -1 if drive_params.drive_left_right_axis_inverted else 1
 
-    hmi_update_msg.drivetrain_fwd_back = invert_axis_fwd_back * \
-        drive_joystick.getFilteredAxis(
-            drive_params.drive_fwd_back_axis_id, drive_params.drive_axis_deadband)
+    hmi_update_msg.drivetrain_fwd_back = invert_axis_fwd_back * drive_joystick.getFilteredAxis(drive_params.drive_fwd_back_axis_id, drive_params.drive_axis_deadband)
 
-    hmi_update_msg.drivetrain_left_right = invert_axis_left_right * \
-        drive_joystick.getFilteredAxis(
-            drive_params.drive_left_right_axis_id, drive_params.drive_axis_deadband)
+    hmi_update_msg.drivetrain_left_right = invert_axis_left_right * drive_joystick.getFilteredAxis(drive_params.drive_left_right_axis_id, drive_params.drive_axis_deadband)
 
     x = hmi_update_msg.drivetrain_fwd_back
     y = hmi_update_msg.drivetrain_left_right
+
     invert_axis_z = -1 if drive_params.drive_z_axis_inverted else 1
-    z = invert_axis_z * drive_joystick.getFilteredAxis(
-        drive_params.drive_z_axis_id, drive_params.drive_z_axis_deadband)
+    z = invert_axis_z * drive_joystick.getFilteredAxis(drive_params.drive_z_axis_id, drive_params.drive_z_axis_deadband)
 
     r = hypotenuse(x, y)
     theta = polar_angle_rad(x, y)
@@ -117,6 +113,9 @@ def joystick_callback(msg: Joystick_Status):
         # drivetrain_orientation = HMI_Signals.FIELD_ORIENTED
 
     hmi_update_msg.drivetrain_orientation = drivetrain_orientation
+
+    # LED Control
+    # TODO
 
     if drive_joystick.getButton(drive_params.reset_odometry_button_id):
         odom = Odometry()
