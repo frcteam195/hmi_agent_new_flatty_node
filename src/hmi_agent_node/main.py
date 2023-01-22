@@ -6,6 +6,7 @@ from ck_ros_base_msgs_node.msg import Joystick_Status, Robot_Status
 from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 from ck_utilities_py_node.ckmath import *
+from ck_ros_msgs_node.msg import Intake_Control
 from nav_msgs.msg._Odometry import Odometry
 import numpy as np
 
@@ -34,6 +35,7 @@ drive_params = DriveParams()
 
 hmi_pub = None
 odom_pub = None
+intake_pub = None
 
 drive_joystick = Joystick(0)
 arm_joystick = Joystick(1)
@@ -95,10 +97,19 @@ def joystick_callback(msg: Joystick_Status):
     hmi_update_msg.drivetrain_swerve_percent_fwd_vel = limit(r, 0.0, 1.0)
     hmi_update_msg.drivetrain_swerve_percent_angular_rot = z
 
+    intake_control = Intake_Control()
+
     if drive_joystick.getButton(drive_params.robot_orient_button_id):
-        drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+        # drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+        intake_control.rollers_intake = True
+        intake_control.rollers_outake = False
     elif drive_joystick.getButton(drive_params.field_orient_button_id):
-        drivetrain_orientation = HMI_Signals.FIELD_ORIENTED
+        intake_control.rollers_intake = False 
+        intake_control.rollers_outake = True 
+    
+    intake_pub.publish(intake_control)
+    
+        # drivetrain_orientation = HMI_Signals.FIELD_ORIENTED
 
     hmi_update_msg.drivetrain_orientation = drivetrain_orientation
 
@@ -242,12 +253,16 @@ def init_params():
 def ros_main(node_name):
     global hmi_pub
     global odom_pub
+    global intake_pub
     rospy.init_node(node_name)
     init_params()
     hmi_pub = rospy.Publisher(
         name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
     odom_pub = rospy.Publisher(
         name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
+    intake_pub = rospy.Publisher(
+        name="/IntakeControl", data_class=Intake_Control, queue_size=10, tcp_nodelay=True
+    )
     rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status,
                      callback=joystick_callback, queue_size=1, tcp_nodelay=True)
     rospy.Subscriber(name="/RobotStatus", data_class=Robot_Status,
