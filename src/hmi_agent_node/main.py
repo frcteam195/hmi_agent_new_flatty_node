@@ -7,6 +7,7 @@ from ck_ros_msgs_node.msg import HMI_Signals
 from ck_utilities_py_node.joystick import Joystick
 from ck_utilities_py_node.ckmath import *
 from ck_ros_msgs_node.msg import Intake_Control, Led_Control
+from frc_robot_utilities_py_node.frc_robot_utilities_py import *
 from nav_msgs.msg._Odometry import Odometry
 import numpy as np
 
@@ -48,21 +49,14 @@ led_control_pub = None
 drive_joystick = Joystick(0)
 operator_controller = Joystick(1)
 
-robot_state = Robot_Status.DISABLED
-
 drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
-
-
-def robot_status_callback(msg: Robot_Status):
-    global robot_state
-    robot_state = msg.robot_state
-
 
 def joystick_callback(msg: Joystick_Status):
     global drivetrain_orientation
-    global robot_state
     global hmi_pub
     global led_control_pub
+
+    global robot_status
 
     global drive_joystick
     global operator_params
@@ -118,7 +112,7 @@ def joystick_callback(msg: Joystick_Status):
 
     # LED Control
     led_control_msg = Led_Control()
-    if robot_state == Robot_Status.DISABLED:
+    if robot_status.get_mode() == Robot_Status.DISABLED:
         led_control_msg.control_mode = Led_Control.SET_LED
         led_control_msg.red = 255
         led_control_msg.green = 0
@@ -300,11 +294,12 @@ def ros_main(node_name):
     rospy.init_node(node_name)
     init_params()
 
+    register_for_robot_updates()
+
     hmi_pub = rospy.Publisher(name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
     odom_pub = rospy.Publisher(name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
     intake_pub = rospy.Publisher(name="/IntakeControl", data_class=Intake_Control, queue_size=10, tcp_nodelay=True)
     led_control_pub = rospy.Publisher(name="/LedControl", data_class=Led_Control, queue_size=10, tcp_nodelay=True)
 
     rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status, callback=joystick_callback, queue_size=1, tcp_nodelay=True)
-    rospy.Subscriber(name="/RobotStatus", data_class=Robot_Status, callback=robot_status_callback, queue_size=1, tcp_nodelay=True)
     rospy.spin()
