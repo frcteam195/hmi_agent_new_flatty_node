@@ -119,7 +119,6 @@ def joystick_callback(msg: Joystick_Status):
     # LED Control
     led_control_msg = Led_Control()
     if robot_state == Robot_Status.DISABLED:
-        #Red SOS
         led_control_msg.control_mode = Led_Control.SET_LED
         led_control_msg.red = 255
         led_control_msg.green = 0
@@ -128,23 +127,25 @@ def joystick_callback(msg: Joystick_Status):
         led_control_msg.number_leds = 8
     else:
         if operator_controller.getButton(operator_params.cone_request_button_id):
-            #cone
-            led_control_msg.control_mode = Led_Control.SET_LED
+            led_control_msg.control_mode = Led_Control.ANIMATE
+            led_control_msg.animation = Led_Control.LARSON
+            led_control_msg.brightness = 1.0
+            led_control_msg.speed = 0.8
             led_control_msg.red = 255
             led_control_msg.green = 255
             led_control_msg.blue = 0
             led_control_msg.white = 0
             led_control_msg.number_leds = 8
         elif operator_controller.getButton(operator_params.cube_request_button_id):
-            #cube
-            led_control_msg.control_mode = Led_Control.SET_LED
+            # cube
+            led_control_msg.control_mode = Led_Control.ANIMATE
             led_control_msg.red = 255
             led_control_msg.green = 0
             led_control_msg.blue = 255
             led_control_msg.white = 0
             led_control_msg.number_leds = 8
         elif operator_controller.getButton(operator_params.party_mode_button_id):
-            #party
+            # party
             led_control_msg.control_mode = Led_Control.ANIMATE
             led_control_msg.animation_index = 0
             led_control_msg.animation_speed = 1
