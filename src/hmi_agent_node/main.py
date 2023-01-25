@@ -112,7 +112,8 @@ def joystick_callback(msg: Joystick_Status):
 
     # LED Control
     led_control_msg = Led_Control()
-    if robot_status.get_mode() == Robot_Status.DISABLED:
+    rospy.loginfo(robot_status.get_mode())
+    if robot_status.get_mode() == RobotMode.DISABLED:
         led_control_msg.control_mode = Led_Control.SET_LED
         led_control_msg.red = 255
         led_control_msg.green = 0
@@ -146,14 +147,16 @@ def joystick_callback(msg: Joystick_Status):
             led_control_msg.number_leds = 8
             led_control_msg.number_leds = 8
         else:
-            led_control_msg.control_mode = Led_Control.SET_LED
+            led_control_msg.control_mode = Led_Control.ANIMATE
+            led_control_msg.animation = Led_Control.LARSON
+            led_control_msg.speed = 0.5
+            led_control_msg.brightness = 0.5
             led_control_msg.red = 0
-            led_control_msg.green = 0
+            led_control_msg.green = 255
             led_control_msg.blue = 0
             led_control_msg.white = 255
             led_control_msg.number_leds = 8
-            led_control_msg.number_leds = 8
-
+            
     led_control_pub.publish(led_control_msg)
 
     if drive_joystick.getButton(drive_params.reset_odometry_button_id):
