@@ -112,7 +112,7 @@ def joystick_callback(msg: Joystick_Status):
 
     # LED Control
     led_control_msg = Led_Control()
-    rospy.loginfo(robot_status.get_mode())
+    # rospy.loginfo(robot_status.get_mode())
     if robot_status.get_mode() == RobotMode.DISABLED:
         led_control_msg.control_mode = Led_Control.SET_LED
         led_control_msg.red = 255
