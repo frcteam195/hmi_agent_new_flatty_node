@@ -45,6 +45,7 @@ hmi_pub = None
 odom_pub = None
 intake_pub = None
 led_control_pub = None
+
 led_timer = 0
 party_time = True
 led_control_msg = Led_Control()
@@ -70,6 +71,7 @@ def joystick_callback(msg: Joystick_Status):
     global led_timer
     global party_time
     global led_control_msg
+
     Joystick.update(msg)
 
     hmi_update_msg = HMI_Signals()
@@ -131,7 +133,6 @@ def joystick_callback(msg: Joystick_Status):
 
     else:
         if operator_controller.getButton(operator_params.cone_request_button_id):
-            # cone
             led_timer = rospy.get_time()
             led_control_msg.animation = Led_Control.STROBE
             led_control_msg.speed = 0.1
@@ -141,7 +142,6 @@ def joystick_callback(msg: Joystick_Status):
             led_control_msg.blue = 0
 
         if operator_controller.getButton(operator_params.cube_request_button_id):
-            # cube
             led_timer = rospy.get_time()
             led_control_msg.animation = Led_Control.STROBE
             led_control_msg.speed = 0.1
@@ -151,7 +151,6 @@ def joystick_callback(msg: Joystick_Status):
             led_control_msg.blue = 255
         
         if operator_controller.getRisingEdgeButton(operator_params.party_mode_button_id):
-            # party
             party_time = not party_time
             
         if rospy.get_time() - led_timer > 3:
@@ -167,7 +166,7 @@ def joystick_callback(msg: Joystick_Status):
                 led_control_msg.animation = Led_Control.RAINBOW
                 led_control_msg.speed = 1
                 led_control_msg.brightness = 1
-            
+
     led_control_pub.publish(led_control_msg)
 
     if drive_joystick.getButton(drive_params.reset_odometry_button_id):
