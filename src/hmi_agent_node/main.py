@@ -45,6 +45,9 @@ hmi_pub = None
 odom_pub = None
 intake_pub = None
 led_control_pub = None
+led_timer = 0
+party_time = True
+led_control_msg = Led_Control()
 
 drive_joystick = Joystick(0)
 operator_controller = Joystick(1)
@@ -63,6 +66,10 @@ def joystick_callback(msg: Joystick_Status):
 
     global drive_params
     global operator_params
+
+    global led_timer
+    global party_time
+    global led_control_msg
     Joystick.update(msg)
 
     hmi_update_msg = HMI_Signals()
@@ -111,51 +118,55 @@ def joystick_callback(msg: Joystick_Status):
     hmi_update_msg.drivetrain_orientation = drivetrain_orientation
 
     # LED Control
-    led_control_msg = Led_Control()
-    # rospy.loginfo(robot_status.get_mode())
+    led_control_msg.control_mode = Led_Control.ANIMATE
+    led_control_msg.number_leds = 8
+    
     if robot_status.get_mode() == RobotMode.DISABLED:
-        led_control_msg.control_mode = Led_Control.SET_LED
+        led_control_msg.animation = Led_Control.STROBE
+        led_control_msg.speed = 0.3
+        led_control_msg.brightness = 0.5
         led_control_msg.red = 255
         led_control_msg.green = 0
         led_control_msg.blue = 0
-        led_control_msg.white = 0
-        led_control_msg.number_leds = 8
+
     else:
         if operator_controller.getButton(operator_params.cone_request_button_id):
             # cone
-            led_control_msg.control_mode = Led_Control.SET_LED
+            led_timer = rospy.get_time()
+            led_control_msg.animation = Led_Control.STROBE
+            led_control_msg.speed = 0.1
+            led_control_msg.brightness = 0.5
             led_control_msg.red = 255
             led_control_msg.green = 255
             led_control_msg.blue = 0
-            led_control_msg.white = 0
-            led_control_msg.number_leds = 8
-        elif operator_controller.getButton(operator_params.cube_request_button_id):
+
+        if operator_controller.getButton(operator_params.cube_request_button_id):
             # cube
-            led_control_msg.control_mode = Led_Control.SET_LED
+            led_timer = rospy.get_time()
+            led_control_msg.animation = Led_Control.STROBE
+            led_control_msg.speed = 0.1
+            led_control_msg.brightness = 0.5
             led_control_msg.red = 255
             led_control_msg.green = 0
             led_control_msg.blue = 255
-            led_control_msg.white = 0
-            led_control_msg.number_leds = 8
-        elif operator_controller.getButton(operator_params.party_mode_button_id):
+        
+        if operator_controller.getRisingEdgeButton(operator_params.party_mode_button_id):
             # party
-            led_control_msg.control_mode = Led_Control.SET_LED
-            led_control_msg.red = 0
-            led_control_msg.green = 255
-            led_control_msg.blue = 0
-            led_control_msg.white = 0
-            led_control_msg.number_leds = 8
-            led_control_msg.number_leds = 8
-        else:
-            led_control_msg.control_mode = Led_Control.ANIMATE
-            led_control_msg.animation = Led_Control.LARSON
-            led_control_msg.speed = 0.5
-            led_control_msg.brightness = 0.5
-            led_control_msg.red = 0
-            led_control_msg.green = 255
-            led_control_msg.blue = 0
-            led_control_msg.white = 255
-            led_control_msg.number_leds = 8
+            party_time = not party_time
+            
+        if rospy.get_time() - led_timer > 3:
+            if not party_time:
+                led_control_msg.animation = Led_Control.LARSON
+                led_control_msg.speed = 0.5
+                led_control_msg.brightness = 0.5
+                led_control_msg.red = 0
+                led_control_msg.green = 255
+                led_control_msg.blue = 0
+        
+            else:
+                led_control_msg.animation = Led_Control.RAINBOW
+                led_control_msg.speed = 1
+                led_control_msg.brightness = 1
             
     led_control_pub.publish(led_control_msg)
 
