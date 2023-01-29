@@ -123,7 +123,7 @@ def joystick_callback(msg: Joystick_Status):
     led_control_msg.control_mode = Led_Control.ANIMATE
     led_control_msg.number_leds = 8
     
-    if robot_status.get_mode() == RobotMode.DISABLED:
+    if not robot_status.is_connected():
         led_control_msg.animation = Led_Control.STROBE
         led_control_msg.speed = 0.3
         led_control_msg.brightness = 0.5
