@@ -112,6 +112,9 @@ def joystick_callback(msg: Joystick_Status):
     elif drive_joystick.getButton(drive_params.field_orient_button_id):
         intake_control.rollers_intake = False 
         intake_control.rollers_outake = True 
+
+    if drive_joystick.getButton(drive_params.robot_orient_button_id) and drive_joystick.getButton(drive_params.field_orient_button_id):
+        intake_control.pincher_solenoid_on = True
     
     intake_pub.publish(intake_control)
     
