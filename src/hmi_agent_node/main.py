@@ -71,7 +71,7 @@ def joystick_callback(msg: Joystick_Status):
     global led_timer
     global party_time
     global led_control_msg
-
+    
     Joystick.update(msg)
 
     hmi_update_msg = HMI_Signals()
@@ -112,6 +112,9 @@ def joystick_callback(msg: Joystick_Status):
     elif drive_joystick.getButton(drive_params.field_orient_button_id):
         intake_control.rollers_intake = False 
         intake_control.rollers_outake = True 
+
+    if drive_joystick.getButton(drive_params.brake_button_id):
+        intake_control.pincher_solenoid_on = True
     
     intake_pub.publish(intake_control)
     
