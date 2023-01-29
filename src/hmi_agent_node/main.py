@@ -33,11 +33,14 @@ class DriveParams:
 
 @dataclass
 class OperatorParams:
-    party_mode_button_id: int = -1
+ 
     operator_pinch_button_id: int = -1
     operator_unpinch_button_id: int = -1
+    lower_intake_button_id: int = -1
+    raise_intake_button_id: int = -1
     operator_intake_button_id: int = -1
     operator_outtake_button_id: int = -1
+    party_mode_button_id: int = -1
 
     led_control_pov_id: int = -1
 
@@ -56,6 +59,7 @@ party_time = True
 led_control_msg = Led_Control()
 
 pinch_active = False
+lift_active = False
 
 drive_joystick = Joystick(0)
 operator_controller = Joystick(1)
@@ -126,6 +130,7 @@ def process_intake_control():
     global operator_controller
     global operator_params
     global pinch_active
+    global lift_active
 
     intake_control = Intake_Control()
 
@@ -135,6 +140,13 @@ def process_intake_control():
         pinch_active = True
 
     intake_control.pincher_solenoid_on = pinch_active
+
+    if operator_controller.getButton(operator_params.lower_intake_button_id):
+        lift_active = False
+    elif operator_controller.getButton(operator_params.raise_intake_button_id):
+        lift_active = True
+
+    intake_control.lift_solenoid_on = not lift_active
 
     if drive_joystick.getButton(drive_params.driver_intake_button_id) or operator_controller.getButton(operator_params.operator_intake_button_id):
         intake_control.rollers_intake = True
@@ -322,12 +334,15 @@ def init_params():
     drive_params.driver_intake_button_id = rospy.get_param("/hmi_agent_node/driver_intake_button_id", -1)
     drive_params.driver_outtake_button_id = rospy.get_param("hmi_agent_node/driver_outtake_button_id", -1)
 
-    operator_params.party_mode_button_id = rospy.get_param("/hmi_agent_node/party_mode_button_id", -1)
+
     operator_params.operator_pinch_button_id = rospy.get_param("/hmi_agent_node/operator_pinch_button_id", -1)
     operator_params.operator_unpinch_button_id = rospy.get_param("/hmi_agent_node/operator_unpinch_button_id", -1)
+    operator_params.lower_intake_button_id = rospy.get_param("/hmi_agent_node/lower_intake_button_id", -1)
+    operator_params.raise_intake_button_id = rospy.get_param("/hmi_agent_node/raise_intake_button_id", -1)
     operator_params.operator_intake_button_id = rospy.get_param("/hmi_agent_node/operator_intake_button_id", -1)
     operator_params.operator_outtake_button_id = rospy.get_param("/hmi_agent_node/operator_outtake_button_id", -1)
-
+    operator_params.party_mode_button_id = rospy.get_param("/hmi_agent_node/party_mode_button_id", -1)
+   
     operator_params.led_control_pov_id = rospy.get_param("/hmi_agent_node/led_control_pov_id", -1)
 
 
