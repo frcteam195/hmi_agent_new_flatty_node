@@ -10,10 +10,14 @@ from ck_ros_msgs_node.msg import Intake_Control, Led_Control
 from frc_robot_utilities_py_node.frc_robot_utilities_py import *
 from nav_msgs.msg._Odometry import Odometry
 import numpy as np
+from ck_utilities_py_node.rosparam_helper import load_parameter_class
 
 
 @dataclass
 class DriveParams:
+    """
+    Driver parameters. Must match the configuration YAML loaded.
+    """
     drive_fwd_back_axis_id: int = -1
     drive_fwd_back_axis_inverted: bool = False
 
@@ -26,24 +30,27 @@ class DriveParams:
     drive_axis_deadband: float = 0.05
     drive_z_axis_deadband: float = 0.05
 
-    driver_unpinch_button_id: int = -1
-    driver_pinch_button_id: int = -1
-    driver_intake_button_id: int = -1
-    driver_outtake_button_id: int = -1
+    reset_odometry_button_id: int = -1
+    robot_orient_button_id: int = -1
+    field_centric_button_id: int = -1
 
 @dataclass
 class OperatorParams:
- 
+    """
+    Operator parameters. Must match the configuration YAML loaded.
+    """
+    operator_outtake_axis_id: int = -1
+    operator_intake_axis_id: int = -1
+
+    activation_threshold: float = 1.0
+
     operator_pinch_button_id: int = -1
     operator_unpinch_button_id: int = -1
     lower_intake_button_id: int = -1
     raise_intake_button_id: int = -1
-    operator_intake_button_id: int = -1
-    operator_outtake_button_id: int = -1
     party_mode_button_id: int = -1
 
     led_control_pov_id: int = -1
-
 
 
 drive_params = DriveParams()
@@ -134,12 +141,21 @@ def process_intake_control():
 
     intake_control = Intake_Control()
 
-    if drive_joystick.getButton(drive_params.driver_unpinch_button_id) or operator_controller.getButton(operator_params.operator_unpinch_button_id):
+    intake_control = Intake_Control()
+
+    if operator_controller.getButton(operator_params.operator_unpinch_button_id):
         pinch_active = False
-    elif drive_joystick.getButton(drive_params.driver_pinch_button_id) or operator_controller.getButton(operator_params.operator_pinch_button_id):
+    elif operator_controller.getButton(operator_params.operator_pinch_button_id):
         pinch_active = True
 
     intake_control.pincher_solenoid_on = pinch_active
+
+    if operator_controller.getRawAxis(operator_params.operator_intake_axis_id) > operator_params.activation_threshold:
+        intake_control.rollers_intake = True
+        intake_control.rollers_outtake = False
+    elif operator_controller.getRawAxis(operator_params.operator_outtake_axis_id) > operator_params.activation_threshold:
+        intake_control.rollers_intake = False
+        intake_control.rollers_outtake = True
 
     if operator_controller.getButton(operator_params.lower_intake_button_id):
         lift_active = False
@@ -148,13 +164,6 @@ def process_intake_control():
 
     intake_control.lift_solenoid_on = not lift_active
 
-    if drive_joystick.getButton(drive_params.driver_intake_button_id) or operator_controller.getButton(operator_params.operator_intake_button_id):
-        intake_control.rollers_intake = True
-        intake_control.rollers_outtake = False
-    elif drive_joystick.getButton(drive_params.driver_outtake_button_id) or operator_controller.getButton(operator_params.operator_outtake_button_id):
-        intake_control.rollers_intake = False 
-        intake_control.rollers_outtake = True 
-    
     intake_pub.publish(intake_control)
 
 def joystick_callback(msg: Joystick_Status):
@@ -173,7 +182,7 @@ def joystick_callback(msg: Joystick_Status):
 
     hmi_update_msg = HMI_Signals()
 
-    hmi_update_msg.drivetrain_brake = drive_joystick.getButton(drive_params.driver_intake_button_id)
+    hmi_update_msg.drivetrain_brake = True
 
     invert_axis_fwd_back = -1 if drive_params.drive_fwd_back_axis_inverted else 1
     invert_axis_left_right = -1 if drive_params.drive_left_right_axis_inverted else 1
@@ -200,14 +209,18 @@ def joystick_callback(msg: Joystick_Status):
     hmi_update_msg.drivetrain_swerve_percent_fwd_vel = limit(r, 0.0, 1.0)
     hmi_update_msg.drivetrain_swerve_percent_angular_rot = z
 
-
+    # Update the orientation controls of the robot.
+    if drive_joystick.getButton(drive_params.robot_orient_button_id):
+        drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+    elif drive_joystick.getButton(drive_params.field_centric_button_id):
+        drivetrain_orientation = HMI_Signals.FIELD_CENTRIC
 
     hmi_update_msg.drivetrain_orientation = drivetrain_orientation
 
     process_leds()
     process_intake_control()
 
-    if drive_joystick.getButton(drive_params.driver_outtake_button_id):
+    if drive_joystick.getButton(drive_params.reset_odometry_button_id):
         odom = Odometry()
 
         odom.header.stamp = rospy.Time.now()
@@ -317,34 +330,8 @@ def init_params():
     global drive_params
     global operator_params
 
-    drive_params.drive_fwd_back_axis_id = rospy.get_param("/hmi_agent_node/drive_fwd_back_axis_id", -1)
-    drive_params.drive_fwd_back_axis_inverted = rospy.get_param("/hmi_agent_node/drive_fwd_back_axis_inverted", False)
-
-    drive_params.drive_left_right_axis_id = rospy.get_param("/hmi_agent_node/drive_left_right_axis_id", -1)
-    drive_params.drive_left_right_axis_inverted = rospy.get_param("/hmi_agent_node/drive_left_right_axis_inverted", False)
-
-    drive_params.drive_z_axis_id = rospy.get_param("/hmi_agent_node/drive_z_axis_id", -1)
-    drive_params.drive_z_axis_inverted = rospy.get_param("/hmi_agent_node/drive_z_axis_inverted", False)
-
-    drive_params.drive_z_axis_deadband = rospy.get_param("/hmi_agent_node/drive_z_axis_deadband", 0.05)
-    drive_params.drive_axis_deadband = rospy.get_param("/hmi_agent_node/drive_axis_deadband", 0.05)
-
-    drive_params.driver_unpinch_button_id = rospy.get_param("/hmi_agent_node/driver_unpinch_button_id", -1)
-    drive_params.driver_pinch_button_id = rospy.get_param("/hmi_agent_node/driver_pinch_button_id", -1)
-    drive_params.driver_intake_button_id = rospy.get_param("/hmi_agent_node/driver_intake_button_id", -1)
-    drive_params.driver_outtake_button_id = rospy.get_param("hmi_agent_node/driver_outtake_button_id", -1)
-
-
-    operator_params.operator_pinch_button_id = rospy.get_param("/hmi_agent_node/operator_pinch_button_id", -1)
-    operator_params.operator_unpinch_button_id = rospy.get_param("/hmi_agent_node/operator_unpinch_button_id", -1)
-    operator_params.lower_intake_button_id = rospy.get_param("/hmi_agent_node/lower_intake_button_id", -1)
-    operator_params.raise_intake_button_id = rospy.get_param("/hmi_agent_node/raise_intake_button_id", -1)
-    operator_params.operator_intake_button_id = rospy.get_param("/hmi_agent_node/operator_intake_button_id", -1)
-    operator_params.operator_outtake_button_id = rospy.get_param("/hmi_agent_node/operator_outtake_button_id", -1)
-    operator_params.party_mode_button_id = rospy.get_param("/hmi_agent_node/party_mode_button_id", -1)
-   
-    operator_params.led_control_pov_id = rospy.get_param("/hmi_agent_node/led_control_pov_id", -1)
-
+    load_parameter_class(drive_params)
+    load_parameter_class(operator_params)
 
 
 def ros_main(node_name):
