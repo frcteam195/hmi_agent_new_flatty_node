@@ -66,7 +66,7 @@ party_time = True
 led_control_msg = Led_Control()
 
 pinch_active = False
-lift_active = False
+lift_active = True
 
 drive_joystick = Joystick(0)
 operator_controller = Joystick(1)
