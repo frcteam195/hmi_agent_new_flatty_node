@@ -1,20 +1,28 @@
-#!/usr/bin/env python3
+"""
+Class definition of the HMI agent node.
+"""
 
-import rospy
 from dataclasses import dataclass
-from ck_ros_base_msgs_node.msg import Joystick_Status, Robot_Status
-from ck_ros_msgs_node.msg import HMI_Signals
-from ck_utilities_py_node.joystick import Joystick
-from ck_utilities_py_node.ckmath import *
-from ck_ros_msgs_node.msg import Intake_Control, Led_Control
-from frc_robot_utilities_py_node.frc_robot_utilities_py import *
-from nav_msgs.msg._Odometry import Odometry
-import numpy as np
-from ck_utilities_py_node.rosparam_helper import load_parameter_class
 
+import numpy as np
+import rospy
+import typing
+
+from ck_ros_msgs_node.msg import HMI_Signals, Intake_Control, Led_Control, Arm_Goal, Arm_Status
+from nav_msgs.msg import Odometry
+
+from ck_utilities_py_node.ckmath import *
+from ck_utilities_py_node.geometry import *
+from ck_utilities_py_node.joystick import Joystick
+from ck_utilities_py_node.rosparam_helper import load_parameter_class
+from frc_robot_utilities_py_node.frc_robot_utilities_py import *
+from frc_robot_utilities_py_node.RobotStatusHelperPy import Alliance, BufferedROSMsgHandlerPy
+
+from ck_ros_base_msgs_node.msg import Joystick_Status
+from ck_utilities_py_node.pid_controller import PIDController
 
 @dataclass
-class DriveParams:
+class DriverParams:
     """
     Driver parameters. Must match the configuration YAML loaded.
     """
@@ -29,325 +37,159 @@ class DriveParams:
 
     drive_axis_deadband: float = 0.05
     drive_z_axis_deadband: float = 0.05
+    drive_z_axis_min_value_after_deadband : float = 0
 
     reset_odometry_button_id: int = -1
+    robot_align_to_grid: int = -1
     robot_orient_button_id: int = -1
     field_centric_button_id: int = -1
 
-@dataclass
-class OperatorParams:
+
+class HmiAgentNode():
     """
-    Operator parameters. Must match the configuration YAML loaded.
+    The HMI agent node.
     """
-    operator_outtake_axis_id: int = -1
-    operator_intake_axis_id: int = -1
 
-    activation_threshold: float = 1.0
+    def __init__(self) -> None:
+        register_for_robot_updates()
 
-    operator_pinch_button_id: int = -1
-    operator_unpinch_button_id: int = -1
-    lower_intake_button_id: int = -1
-    raise_intake_button_id: int = -1
-    party_mode_button_id: int = -1
+        self.driver_joystick = Joystick(0)
+        # self.operator_controller = Joystick(1)
 
-    led_control_pov_id: int = -1
+        self.operator_button_box = Joystick(1)
+        self.operator_joystick = Joystick(2)
+
+        self.driver_params = DriverParams()
+        load_parameter_class(self.driver_params)
+
+        self.drivetrain_orientation = HMI_Signals.FIELD_CENTRIC
+
+        self.led_control_message = Led_Control()
+        self.led_timer = 0
+        self.party_time = False
+
+        self.heading = 0.0
+
+        self.pinch_active = True
+
+        self.hmi_publisher = rospy.Publisher(name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
+        self.led_control_publisher = rospy.Publisher(name="/LedControl", data_class=Led_Control, queue_size=10, tcp_nodelay=True)
+
+        self.odometry_subscriber = BufferedROSMsgHandlerPy(Odometry)
+        self.odometry_subscriber.register_for_updates("odometry/filtered")
+
+        rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status, callback=self.joystick_callback, queue_size=1, tcp_nodelay=True)
+        rospy.spin()
 
 
-drive_params = DriveParams()
-operator_params = OperatorParams()
+    def joystick_callback(self, message: Joystick_Status):
+        """
+        Joystick callback function. This runs everytime a new joystick status message is received.
+        """
 
-hmi_pub = None
-odom_pub = None
-intake_pub = None
-led_control_pub = None
+        #DO NOT REMOVE THIS CHECK!!!!!!!!!! DID YOU LEARN NOTHING FROM 2022?!
+        if robot_status.get_mode() != RobotMode.TELEOP:
+            return
 
-led_timer = 0
-party_time = True
-led_control_msg = Led_Control()
+        Joystick.update(message)
 
-pinch_active = False
-lift_active = True
+        hmi_update_message = HMI_Signals()
+        hmi_update_message.drivetrain_brake = True
 
-drive_joystick = Joystick(0)
-operator_controller = Joystick(1)
 
-drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+        #######################################################################
+        ###                         DRIVER CONTROLS                         ###
+        #######################################################################
+        invert_axis_fwd_back = -1 if self.driver_params.drive_fwd_back_axis_inverted else 1
+        invert_axis_left_right = -1 if self.driver_params.drive_left_right_axis_inverted else 1
 
-def process_leds():
-    global led_control_msg
-    global led_control_pub
-    global led_timer
-    global operator_controller
-    global operator_params
-    global party_time
-    global robot_status
+        fwd_back_value = self.driver_joystick.getFilteredAxis(self.driver_params.drive_fwd_back_axis_id, self.driver_params.drive_axis_deadband)
+        hmi_update_message.drivetrain_fwd_back = invert_axis_fwd_back * fwd_back_value
 
-    led_control_msg.control_mode = Led_Control.ANIMATE
-    led_control_msg.number_leds = 8
-    
-    if not robot_status.is_connected():
-        led_control_msg.animation = Led_Control.STROBE
-        led_control_msg.speed = 0.3
-        led_control_msg.brightness = 0.5
-        led_control_msg.red = 255
-        led_control_msg.green = 0
-        led_control_msg.blue = 0
+        left_right_value = self.driver_joystick.getFilteredAxis(self.driver_params.drive_left_right_axis_id, self.driver_params.drive_axis_deadband)
+        hmi_update_message.drivetrain_left_right = invert_axis_left_right * left_right_value
 
-    else:
-        if operator_controller.getPOV(operator_params.led_control_pov_id) == 270:
-            led_timer = rospy.get_time()
-            led_control_msg.animation = Led_Control.STROBE
-            led_control_msg.speed = 0.1
-            led_control_msg.brightness = 0.5
-            led_control_msg.red = 255
-            led_control_msg.green = 255
-            led_control_msg.blue = 0
+        x = hmi_update_message.drivetrain_fwd_back
+        y = hmi_update_message.drivetrain_left_right
 
-        if operator_controller.getPOV(operator_params.led_control_pov_id) == 90:
-            led_timer = rospy.get_time()
-            led_control_msg.animation = Led_Control.STROBE
-            led_control_msg.speed = 0.1
-            led_control_msg.brightness = 0.5
-            led_control_msg.red = 255
-            led_control_msg.green = 0
-            led_control_msg.blue = 255
-        
-        if operator_controller.getRisingEdgeButton(operator_params.party_mode_button_id):
-            party_time = not party_time
-            
-        if rospy.get_time() - led_timer > 3:
-            if not party_time:
-                led_control_msg.animation = Led_Control.LARSON
-                led_control_msg.speed = 0.5
-                led_control_msg.brightness = 0.5
-                led_control_msg.red = 0
-                led_control_msg.green = 255
-                led_control_msg.blue = 0
-        
-            else:
-                led_control_msg.animation = Led_Control.RAINBOW
-                led_control_msg.speed = 1
-                led_control_msg.brightness = 1
+        invert_axis_z = -1 if self.driver_params.drive_z_axis_inverted else 1
+        z = invert_axis_z * self.driver_joystick.getFilteredAxis(self.driver_params.drive_z_axis_id, self.driver_params.drive_z_axis_deadband, self.driver_params.drive_z_axis_min_value_after_deadband)
 
-    led_control_pub.publish(led_control_msg)
+        r = hypotenuse(x, y)
+        theta = polar_angle_rad(x, y)
 
-def process_intake_control():
-    global drive_joystick
-    global drive_params
-    global operator_controller
-    global operator_params
-    global pinch_active
-    global lift_active
-
-    intake_control = Intake_Control()
-
-    intake_control = Intake_Control()
-
-    if operator_controller.getButton(operator_params.operator_unpinch_button_id):
-        pinch_active = False
-    elif operator_controller.getButton(operator_params.operator_pinch_button_id):
-        pinch_active = True
-
-    intake_control.pincher_solenoid_on = pinch_active
-
-    if operator_controller.getRawAxis(operator_params.operator_intake_axis_id) > operator_params.activation_threshold:
-        intake_control.rollers_intake = True
-        intake_control.rollers_outtake = False
-    elif operator_controller.getRawAxis(operator_params.operator_outtake_axis_id) > operator_params.activation_threshold:
-        intake_control.rollers_intake = False
-        intake_control.rollers_outtake = True
-
-    if operator_controller.getButton(operator_params.lower_intake_button_id):
-        lift_active = False
-    elif operator_controller.getButton(operator_params.raise_intake_button_id):
-        lift_active = True
-
-    intake_control.lift_solenoid_on = not lift_active
-
-    intake_pub.publish(intake_control)
-
-def joystick_callback(msg: Joystick_Status):
-    global drivetrain_orientation
-    global hmi_pub
-
-    global robot_status
-
-    global drive_joystick
-    global operator_controller
-
-    global drive_params
-    global operator_params
-    
-    Joystick.update(msg)
-
-    hmi_update_msg = HMI_Signals()
-
-    hmi_update_msg.drivetrain_brake = True
-
-    invert_axis_fwd_back = -1 if drive_params.drive_fwd_back_axis_inverted else 1
-    invert_axis_left_right = -1 if drive_params.drive_left_right_axis_inverted else 1
-
-    hmi_update_msg.drivetrain_fwd_back = invert_axis_fwd_back * drive_joystick.getFilteredAxis(drive_params.drive_fwd_back_axis_id, drive_params.drive_axis_deadband)
-
-    hmi_update_msg.drivetrain_left_right = invert_axis_left_right * drive_joystick.getFilteredAxis(drive_params.drive_left_right_axis_id, drive_params.drive_axis_deadband)
-
-    x = hmi_update_msg.drivetrain_fwd_back
-    y = hmi_update_msg.drivetrain_left_right
-
-    invert_axis_z = -1 if drive_params.drive_z_axis_inverted else 1
-    z = invert_axis_z * drive_joystick.getFilteredAxis(drive_params.drive_z_axis_id, drive_params.drive_z_axis_deadband)
-
-    r = hypotenuse(x, y)
-    theta = polar_angle_rad(x, y)
-
-    z = np.sign(z) * pow(z, 2)
-    active_theta = theta
-    if (r > drive_params.drive_axis_deadband):
+        z = np.sign(z) * pow(z, 2)
         active_theta = theta
+        if r > self.driver_params.drive_axis_deadband:
+            active_theta = theta
 
-    hmi_update_msg.drivetrain_swerve_direction = active_theta
-    hmi_update_msg.drivetrain_swerve_percent_fwd_vel = limit(r, 0.0, 1.0)
-    hmi_update_msg.drivetrain_swerve_percent_angular_rot = z
+        hmi_update_message.drivetrain_swerve_direction = active_theta
 
-    # Update the orientation controls of the robot.
-    if drive_joystick.getButton(drive_params.robot_orient_button_id):
-        drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
-    elif drive_joystick.getButton(drive_params.field_centric_button_id):
-        drivetrain_orientation = HMI_Signals.FIELD_CENTRIC
+        hmi_update_message.drivetrain_swerve_percent_fwd_vel = r
+        hmi_update_message.drivetrain_swerve_percent_angular_rot = z
 
-    hmi_update_msg.drivetrain_orientation = drivetrain_orientation
+        # Swap between field centric and robot oriented drive.
+        if self.driver_joystick.getButton(self.driver_params.robot_orient_button_id):
+            self.drivetrain_orientation = HMI_Signals.ROBOT_ORIENTED
+        elif self.driver_joystick.getButton(self.driver_params.field_centric_button_id):
+            self.drivetrain_orientation = HMI_Signals.FIELD_CENTRIC
 
-    process_leds()
-    process_intake_control()
+        hmi_update_message.drivetrain_orientation = self.drivetrain_orientation
 
-    if drive_joystick.getButton(drive_params.reset_odometry_button_id):
-        odom = Odometry()
-
-        odom.header.stamp = rospy.Time.now()
-        odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
-
-        odom.pose.pose.orientation.w = 1
-        odom.pose.pose.orientation.x = 0
-        odom.pose.pose.orientation.y = 0
-        odom.pose.pose.orientation.z = 0
-        odom.pose.pose.position.x = 0
-        odom.pose.pose.position.y = 0
-        odom.pose.pose.position.z = 0
-
-        odom.twist.twist.linear.x = 0
-        odom.twist.twist.linear.y = 0
-        odom.twist.twist.linear.z = 0
-
-        odom.twist.twist.angular.x = 0
-        odom.twist.twist.angular.y = 0
-        odom.twist.twist.angular.z = 0
-
-        odom.pose.covariance = [
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.00001,
-        ]
-
-        odom.twist.covariance =[
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.001,
-        ]
-
-        odom_pub.publish(odom)
-
-    hmi_pub.publish(hmi_update_msg)
+        if self.driver_joystick.getRisingEdgeButton(self.driver_params.reset_odometry_button_id):
+            reset_robot_pose(robot_status.get_alliance())
 
 
-def init_params():
-    global drive_params
-    global operator_params
 
-    load_parameter_class(drive_params)
-    load_parameter_class(operator_params)
+    def process_leds(self):
+        """
+        Handles all the LED changes.
+        """
+        self.led_control_message.control_mode = Led_Control.ANIMATE
+        self.led_control_message.number_leds = 8
 
+        if not robot_status.is_connected():
+            self.led_control_message.animation = Led_Control.STROBE
+            self.led_control_message.speed = 0.3
+            self.led_control_message.brightness = 0.5
+            self.led_control_message.red = 255
+            self.led_control_message.green = 0
+            self.led_control_message.blue = 0
 
-def ros_main(node_name):
-    global hmi_pub
-    global odom_pub
-    global intake_pub
-    global led_control_pub
-    rospy.init_node(node_name)
-    init_params()
+        else:
+            if self.operator_joystick.getPOV(self.operator_params.led_control_pov_id) == 270:
+                self.led_timer = rospy.get_time()
+                self.led_control_message.animation = Led_Control.STROBE
+                self.led_control_message.speed = 0.1
+                self.led_control_message.brightness = 0.5
+                self.led_control_message.red = 255
+                self.led_control_message.green = 255
+                self.led_control_message.blue = 0
 
-    register_for_robot_updates()
+            if self.operator_joystick.getPOV(self.operator_params.led_control_pov_id) == 90:
+                self.led_timer = rospy.get_time()
+                self.led_control_message.animation = Led_Control.STROBE
+                self.led_control_message.speed = 0.1
+                self.led_control_message.brightness = 0.5
+                self.led_control_message.red = 255
+                self.led_control_message.green = 0
+                self.led_control_message.blue = 255
 
-    hmi_pub = rospy.Publisher(name="/HMISignals", data_class=HMI_Signals, queue_size=10, tcp_nodelay=True)
-    odom_pub = rospy.Publisher(name="/ResetHeading", data_class=Odometry, queue_size=10, tcp_nodelay=True)
-    intake_pub = rospy.Publisher(name="/IntakeControl", data_class=Intake_Control, queue_size=10, tcp_nodelay=True)
-    led_control_pub = rospy.Publisher(name="/LedControl", data_class=Led_Control, queue_size=10, tcp_nodelay=True)
+            # if self.operator_joystick.getRisingEdgeButton(self.operator_params.party_mode_button_id):
+            #     self.party_time = not self.party_time
 
-    rospy.Subscriber(name="/JoystickStatus", data_class=Joystick_Status, callback=joystick_callback, queue_size=1, tcp_nodelay=True)
-    rospy.spin()
+            if rospy.get_time() - self.led_timer > 3:
+                if not self.party_time:
+                    self.led_control_message.animation = Led_Control.LARSON
+                    self.led_control_message.speed = 0.5
+                    self.led_control_message.brightness = 0.5
+                    self.led_control_message.red = 0
+                    self.led_control_message.green = 255
+                    self.led_control_message.blue = 0
+
+                else:
+                    self.led_control_message.animation = Led_Control.RAINBOW
+                    self.led_control_message.speed = 1
+                    self.led_control_message.brightness = 1
+
+        self.led_control_publisher.publish(self.led_control_message)
