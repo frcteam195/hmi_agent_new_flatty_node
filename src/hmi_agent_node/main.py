@@ -139,7 +139,7 @@ class HmiAgentNode():
         if self.driver_joystick.getRisingEdgeButton(self.driver_params.reset_odometry_button_id):
             reset_robot_pose(robot_status.get_alliance())
 
-
+        self.hmi_publisher.publish(hmi_update_message)
 
     def process_leds(self):
         """
